@@ -70,6 +70,7 @@ const expenseCategories = [
   'Mascotas',
   'Deudas',
   'Ahorro',
+  'TDC',
   'Otros',
 ] as const
 
@@ -229,6 +230,7 @@ const categoryColors: Record<MovementCategory, string> = {
   Mascotas: '#a16207',
   Deudas: '#b91c1c',
   Ahorro: '#16a34a',
+  TDC: '#ff00b3',
 
   Otros: '#64748b',
 }
