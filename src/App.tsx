@@ -27,6 +27,7 @@ import {
   ShieldCheck,
   Sun,
   Trash2,
+  TrendingUp,
   Unlock,
   UserPlus,
   Wallet,
@@ -38,6 +39,8 @@ import {
   CartesianGrid,
   Cell,
   Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -106,6 +109,13 @@ const dashboardModules = [
     mobileLabel: 'Ahorro',
     detail: 'Dinero reservado',
     icon: PiggyBank,
+  },
+  {
+    id: 'projection',
+    label: 'Proyeccion',
+    mobileLabel: 'Futuro',
+    detail: 'Vision futura',
+    icon: TrendingUp,
   },
   {
     id: 'charts',
@@ -299,6 +309,19 @@ function createDefaultSavingsForm(): SavingsForm {
 
 function parseNumberInput(value: string) {
   return Number(value.trim().replace(',', '.'))
+}
+
+function parseOptionalMoneyInput(value: string) {
+  if (!value.trim()) {
+    return null
+  }
+
+  const amount = parseNumberInput(value)
+  return Number.isFinite(amount) && amount >= 0 ? amount : null
+}
+
+function clampWholeNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(Math.round(value), min), max)
 }
 
 function parseLocalDate(date: string) {
@@ -682,6 +705,9 @@ function App() {
   const [isSavingReserve, setIsSavingReserve] = useState(false)
   const [activeModule, setActiveModule] = useState<DashboardModule>('overview')
   const [chartCurrency, setChartCurrency] = useState<Currency>('MXN')
+  const [projectionMonths, setProjectionMonths] = useState('6')
+  const [projectionMonthlyIncome, setProjectionMonthlyIncome] = useState('')
+  const [projectionMonthlyExpenses, setProjectionMonthlyExpenses] = useState('')
   const [themePreference, setThemePreference] = useState<ThemePreference>(
     getInitialThemePreference,
   )
@@ -1051,6 +1077,91 @@ function App() {
       }))
       .filter((item) => item.value > 0)
   }, [movements, now, chartCurrency])
+
+  const projectionDefaults = useMemo(() => {
+    const currentMonthKey = getMonthKey(now)
+    const months = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1)
+      return {
+        key: getMonthKey(date),
+        income: 0,
+        expenses: 0,
+      }
+    })
+
+    movements.forEach((movement) => {
+      const movementMonth = getMonthKey(parseLocalDate(movement.date))
+      const month = months.find((item) => item.key === movementMonth)
+      if (!month) {
+        return
+      }
+
+      if (movement.type === 'income') {
+        month.income += movement.mxnAmount
+      } else {
+        month.expenses += movement.mxnAmount
+      }
+    })
+
+    const completedMonths = months.filter((month) => month.key !== currentMonthKey)
+    const incomeMonths =
+      completedMonths.filter((month) => month.income > 0).length > 0
+        ? completedMonths.filter((month) => month.income > 0)
+        : months.filter((month) => month.income > 0)
+    const expenseMonths =
+      completedMonths.filter((month) => month.expenses > 0).length > 0
+        ? completedMonths.filter((month) => month.expenses > 0)
+        : months.filter((month) => month.expenses > 0)
+    const averageIncome =
+      incomeMonths.length > 0
+        ? incomeMonths.reduce((sum, month) => sum + month.income, 0) /
+          incomeMonths.length
+        : 0
+    const averageExpenses =
+      expenseMonths.length > 0
+        ? expenseMonths.reduce((sum, month) => sum + month.expenses, 0) /
+          expenseMonths.length
+        : 0
+
+    return {
+      monthlyIncome: averageIncome,
+      monthlyExpenses: monthlyBudget > 0 ? monthlyBudget : averageExpenses,
+    }
+  }, [movements, monthlyBudget, now])
+
+  const projectionMonthCount = clampWholeNumber(
+    parseOptionalMoneyInput(projectionMonths) ?? 6,
+    1,
+    60,
+  )
+  const projectedMonthlyIncome =
+    parseOptionalMoneyInput(projectionMonthlyIncome) ??
+    projectionDefaults.monthlyIncome
+  const projectedMonthlyExpenses =
+    parseOptionalMoneyInput(projectionMonthlyExpenses) ??
+    projectionDefaults.monthlyExpenses
+  const projectedMonthlyFlow = projectedMonthlyIncome - projectedMonthlyExpenses
+
+  const projectionChartData = useMemo(() => {
+    return Array.from({ length: projectionMonthCount + 1 }, (_, index) => {
+      const date = new Date(now.getFullYear(), now.getMonth() + index, 1)
+      const year = String(date.getFullYear()).slice(2)
+
+      return {
+        month: index === 0 ? 'Hoy' : `${getMonthLabel(date)} ${year}`,
+        saldo: availableMxnBalance + projectedMonthlyFlow * index,
+      }
+    })
+  }, [availableMxnBalance, now, projectedMonthlyFlow, projectionMonthCount])
+
+  const projectedFinalBalance =
+    projectionChartData[projectionChartData.length - 1]?.saldo ?? availableMxnBalance
+  const projectedBalanceChange = projectedFinalBalance - availableMxnBalance
+  const projectedTotalWithSavings = projectedFinalBalance + savingsTotals.MXN
+  const monthsUntilNegativeBalance =
+    projectedMonthlyFlow < 0 && availableMxnBalance > 0
+      ? Math.floor(availableMxnBalance / Math.abs(projectedMonthlyFlow))
+      : null
 
   const filteredMovements = useMemo(() => {
     return movements
@@ -2185,6 +2296,172 @@ function App() {
               )}
             </div>
           </section>
+        </section>
+      </section>
+
+      <section
+        id="module-projection"
+        className={`dashboard-module ${
+          activeModule === 'projection' ? 'active' : ''
+        }`}
+      >
+        <div className="module-heading">
+          <div>
+            <span className="eyebrow">Modulo</span>
+            <h2>Vision economica futura</h2>
+          </div>
+        </div>
+
+        <section className="metrics-grid projection-metrics" aria-label="Proyeccion financiera">
+          <MetricCard
+            title="Saldo proyectado"
+            value={formatCurrency(projectedFinalBalance, 'MXN')}
+            detail={`${projectionMonthCount} meses`}
+            icon={<TrendingUp aria-hidden="true" />}
+            tone={projectedBalanceChange >= 0 ? 'green' : 'red'}
+          />
+          <MetricCard
+            title="Cambio estimado"
+            value={formatCurrency(projectedBalanceChange, 'MXN')}
+            detail="Contra saldo actual"
+            icon={<CircleDollarSign aria-hidden="true" />}
+            tone={projectedBalanceChange >= 0 ? 'green' : 'red'}
+          />
+          <MetricCard
+            title="Flujo mensual"
+            value={formatCurrency(projectedMonthlyFlow, 'MXN')}
+            detail="Ingreso menos gasto"
+            icon={<BarChart3 aria-hidden="true" />}
+            tone={projectedMonthlyFlow >= 0 ? 'blue' : 'amber'}
+          />
+          <MetricCard
+            title="Con apartados"
+            value={formatCurrency(projectedTotalWithSavings, 'MXN')}
+            detail="Saldo futuro + reservado"
+            icon={<PiggyBank aria-hidden="true" />}
+            tone="blue"
+          />
+        </section>
+
+        {projectedFinalBalance < 0 && (
+          <section className="budget-alert danger" role="status">
+            <AlertTriangle aria-hidden="true" />
+            <div>
+              <strong>Saldo proyectado negativo</strong>
+              <p>
+                Con este ritmo, el saldo podria quedar bajo cero
+                {monthsUntilNegativeBalance !== null &&
+                monthsUntilNegativeBalance <= projectionMonthCount
+                  ? ` en aproximadamente ${monthsUntilNegativeBalance + 1} meses.`
+                  : ' dentro del periodo seleccionado.'}
+              </p>
+            </div>
+          </section>
+        )}
+
+        <section className="projection-layout">
+          <section className="panel projection-controls">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">Simulador</span>
+                <h2>Variables mensuales</h2>
+              </div>
+              <TrendingUp aria-hidden="true" />
+            </div>
+
+            <div className="projection-form">
+              <label>
+                Meses a futuro
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={projectionMonths}
+                  onChange={(event) => setProjectionMonths(event.target.value)}
+                />
+              </label>
+
+              <label>
+                Ingreso mensual (MXN)
+                <input
+                  inputMode="decimal"
+                  pattern="[0-9]*[.,]?[0-9]*"
+                  type="text"
+                  placeholder={
+                    projectionDefaults.monthlyIncome > 0
+                      ? String(Math.round(projectionDefaults.monthlyIncome))
+                      : '0.00'
+                  }
+                  value={projectionMonthlyIncome}
+                  onChange={(event) =>
+                    setProjectionMonthlyIncome(event.target.value)
+                  }
+                />
+              </label>
+
+              <label>
+                Gasto mensual (MXN)
+                <input
+                  inputMode="decimal"
+                  pattern="[0-9]*[.,]?[0-9]*"
+                  type="text"
+                  placeholder={
+                    projectionDefaults.monthlyExpenses > 0
+                      ? String(Math.round(projectionDefaults.monthlyExpenses))
+                      : '0.00'
+                  }
+                  value={projectionMonthlyExpenses}
+                  onChange={(event) =>
+                    setProjectionMonthlyExpenses(event.target.value)
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="projection-summary">
+              <div>
+                <span>Saldo disponible hoy</span>
+                <strong>{formatCurrency(availableMxnBalance, 'MXN')}</strong>
+              </div>
+              <div>
+                <span>Ingreso usado</span>
+                <strong>{formatCurrency(projectedMonthlyIncome, 'MXN')}</strong>
+              </div>
+              <div>
+                <span>Gasto usado</span>
+                <strong>{formatCurrency(projectedMonthlyExpenses, 'MXN')}</strong>
+              </div>
+            </div>
+          </section>
+
+          <article className="panel chart-panel projection-chart-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">Proyeccion</span>
+                <h2>Saldo estimado (MXN)</h2>
+              </div>
+              <TrendingUp aria-hidden="true" />
+            </div>
+
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={projectionChartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="month" />
+                <YAxis tickFormatter={(value) => compactCurrency(Number(value), 'MXN')} />
+                <Tooltip formatter={(value) => formatCurrency(Number(value), 'MXN')} />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="saldo"
+                  name="Saldo disponible"
+                  stroke="#2563eb"
+                  strokeWidth={3}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </article>
         </section>
       </section>
 

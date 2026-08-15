@@ -430,7 +430,8 @@
 
 .metrics-grid,
 .charts-grid,
-.workspace-grid {
+.workspace-grid,
+.projection-layout {
   display: grid;
   gap: 16px;
 }
@@ -889,6 +890,54 @@ button:disabled {
   height: 180px;
 }
 
+.projection-metrics {
+  margin-bottom: 16px;
+}
+
+.projection-layout {
+  grid-template-columns: minmax(280px, 0.74fr) minmax(0, 1.26fr);
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.projection-form {
+  display: grid;
+  gap: 14px;
+}
+
+.projection-summary {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.projection-summary div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface-subtle);
+}
+
+.projection-summary span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.projection-summary strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.projection-chart-panel {
+  min-height: 402px;
+}
+
 .charts-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: 16px;
@@ -1086,7 +1135,7 @@ td span {
     margin: 0 0 14px;
     padding: 6px;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
     gap: 4px;
     background: var(--surface-glass);
     box-shadow: var(--shadow-soft);
@@ -1119,6 +1168,7 @@ td span {
   .app-header,
   .workspace-grid,
   .savings-layout,
+  .projection-layout,
   .charts-grid {
     grid-template-columns: 1fr;
   }
@@ -1516,6 +1566,7 @@ textarea:focus {
   .app-header,
   .workspace-grid,
   .savings-layout,
+  .projection-layout,
   .charts-grid {
     grid-template-columns: 1fr;
   }
@@ -1523,7 +1574,7 @@ textarea:focus {
   .mobile-module-nav {
     border-radius: 8px;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
     background: var(--surface-glass);
     box-shadow: var(--shadow-soft);
     backdrop-filter: blur(12px);
